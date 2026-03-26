@@ -2,10 +2,13 @@
 
 This is a 1:1 javascript port of the lightweight 3D physics engine "qu3e" for use in browsers.<br>
 
-![](https://i.imgur.com/F5JHVn8.mp4)<br>
+<video width="320" height="240" controls>
+  <source src="https://i.imgur.com/F5JHVn8.mp4" type="video/mp4">
+</video>
 
-![](https://i.imgur.com/1jLcZqr.mp4)<br>
-
+<video width="320" height="240" controls>
+  <source src="https://i.imgur.com/1jLcZqr.mp4" type="video/mp4">
+</video>
 
 # Purpose
 
