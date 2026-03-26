@@ -2,8 +2,8 @@
 
 This is a 1:1 javascript port of the lightweight 3D physics engine "qu3e" for use in browsers.<br>
 
-![hippo](https://i.imgur.com/F5JHVn8.mp4)
-![hippo](https://i.imgur.com/1jLcZqr.mp4)
+![hippo](https://raw.githubusercontent.com/Costruvo/qu3e-js/refs/heads/main/bandicam%202026-03-26%2014-18-35-016.gif)
+![hippo](https://raw.githubusercontent.com/Costruvo/qu3e-js/refs/heads/main/bandicam%202026-03-26%2014-17-44-088.gif)
 
 # Purpose
 
