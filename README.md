@@ -1,24 +1,23 @@
 # qu3e-js
 
-This is a 1:1 javascript port of the lightweight 3D physics engine "qu3e" for use in browsers.<br>
+A 1:1 javascript port of the lightweight 3D physics engine "qu3e" for use in browsers. Here's a demo:<br>
 
 ![hippo](https://raw.githubusercontent.com/Costruvo/qu3e-js/refs/heads/main/bandicam%202026-03-26%2014-17-44-088.gif)
 
 # Purpose
 
-I did this for a 3D game I'm developing that I'd like to port to JS, so that it's playable in browsers (and supported on many devices).<br><br>
+I did this for a 3D game I'm developing that I'd like to port to JS, so that it's playable in browsers (and supported on many devices).<br>
 I needed physics to be synchronized across all clients, and also be fast enough to run on an iPhone, and what better way to do that than with the same engine.<br>
 
 # Important
 
-This port is not fine-tuned. It needs some minor improvement, mostly with different object scales (see below).<br>
+This port needs a little fine-tuning, mainly at different object scales (see below).<br>
 ![hippo](https://raw.githubusercontent.com/Costruvo/qu3e-js/refs/heads/main/bandicam%202026-03-26%2014-18-35-016.gif)
 
-They usually collide and generate the correct impulses, but other times the impulse is a bit extreme.<br>
-It rarely misses a collision, but when it does the object will randomly fall through what it's on, or go inside another.<br>
-But it usually corrects itself.<br>
+They usually collide and generate the correct impulses, but other times the impulse is too extreme.<br>
+It rarely misses a collision, but it usually corrects itself.<br>
 
-Any help with fine-tuning this is much appreciated<br>
+Any help is much appreciated<br>
 <br>
 
 All credits go to Randy Gaul
