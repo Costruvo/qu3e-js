@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Qu3e Web Demo</title>
+<style>
+body { margin:0; overflow:hidden; background:#000; }
+canvas { width:100vw; height:100vh; display:block; }
+</style>
+</head>
+<body>
+<canvas id="glcanvas"></canvas>
+
+<script type="text/javascript">
+window.onerror = function(msg, url, lineNo, columnNo, error) {
+    var str = "";
+    str += 'Error message: ' + msg + '\n';
+    str += 'URL: ' + url + '\n';
+    str += 'Line: ' + lineNo + '\n';
+    str += 'Column: ' + columnNo + '\n';
+    str += 'Error object: ' + error + '\n';
+    alert(str);
+    return true; // Prevents default browser error handling
+};
+</script>
+
+<script src="qu3e_js/common/q3Types.js"></script>
+<script src="qu3e_js/math/q3Vec3.js"></script>
+<script src="qu3e_js/math/q3Mat3.js"></script>
+<script src="qu3e_js/math/q3Math.js"></script>
+<script src="qu3e_js/math/q3Transform.js"></script>
+<script src="qu3e_js/math/q3Quaternion.js"></script>
+<script src="qu3e_js/common/q3Settings.js"></script>
+<script src="qu3e_js/common/q3Memory.js"></script>
+<script src="qu3e_js/common/q3Geometry.js"></script>
+<script src="qu3e_js/collision/q3Box.js"></script>
+<script src="qu3e_js/debug/q3Render.js"></script>
+<script src="qu3e_js/broadphase/q3DynamicAABBTree.js"></script>
+<script src="qu3e_js/dynamics/q3Contact.js"></script>
+<script src="qu3e_js/collision/q3Collide.js"></script>
+<script src="qu3e_js/broadphase/q3BroadPhase.js"></script>
+<script src="qu3e_js/dynamics/q3ContactManager.js"></script>
+<script src="qu3e_js/dynamics/q3Body.js"></script>
+<script src="qu3e_js/dynamics/q3ContactSolver.js"></script>
+<script src="qu3e_js/dynamics/q3Island.js"></script>
+<script src="qu3e_js/scene/q3Scene.js"></script>
+
+<script>
+
+// =====================================================
+// WebGL Setup
+// =====================================================
+
+const canvas = document.getElementById("glcanvas");
+const gl = canvas.getContext("webgl2") || canvas.getContext("webgl");
+
+function resize(){
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    gl.viewport(0,0,canvas.width,canvas.height);
+}
+window.addEventListener("resize",resize);
+resize();
+
+
+gl.enable(gl.DEPTH_TEST);
+
+gl.enable(gl.BLEND);
+gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+const RENDER_OPAQUE = 0;
+const RENDER_TRANSPARENT = 1;
+
+// =====================================================
+// Shader -- Supports per-face texturing
+// =====================================================
+
+/*
+0 = +X (right)
+1 = -X (left)
+2 = +Y (top)
+3 = -Y (bottom)
+4 = +Z (front)
+5 = -Z (back)
+*/
+
+const vs = `
+attribute vec3 position;
+attribute vec2 uv;
+
+uniform mat4 mvp;
+uniform vec3 brickScale;
+uniform int faceId;
+
+varying vec2 vUV;
+
+void main(){
+
+    vec2 scaleUV = vec2(1.0,1.0);
+
+    // -Z (back)
+    if(faceId == 0){
+        scaleUV = vec2(brickScale.x, brickScale.y);
+    }
+
+    // +Z (front)
+    else if(faceId == 1){
+        scaleUV = vec2(brickScale.x, brickScale.y);
+    }
+
+    // -X (left)
+    else if(faceId == 2){
+        scaleUV = vec2(brickScale.z, brickScale.y);
+    }
+
+    // +X (right)
+    else if(faceId == 3){
+        scaleUV = vec2(brickScale.z, brickScale.y);
+    }
+
+    // -Y (bottom)
+    else if(faceId == 4){
+        scaleUV = vec2(brickScale.x, brickScale.z);
+    }
+
+    // +Y (top)
+    else if(faceId == 5){
+        scaleUV = vec2(brickScale.x, brickScale.z);
+    }
+
+    vUV = uv * scaleUV;
+
+    gl_Position = mvp * vec4(position,1.0);
+}
+`;
+
+const fs = `
+precision mediump float;
+
+varying vec2 vUV;
+
+uniform sampler2D tex;
+uniform vec4 uColor;
+uniform float useTexture;
+
+void main(){
+
+    vec4 finalColor = uColor;
+
+    if(useTexture > 0.5){
+        vec4 t = texture2D(tex, vUV);
+
+        // Darken the texture slightly to make it pop over brick
+        vec3 darkenedTex = t.rgb * 0.5 + t.a * 0.3;
+
+        // Blend with brick based on texture alpha
+        finalColor.rgb = mix(uColor.rgb, darkenedTex, t.a);
+
+        // Keep brick alpha
+        finalColor.a = uColor.a;
+    }
+
+    gl_FragColor = finalColor;
+}
+`;
+
+function createShader(type,src){
+    const s = gl.createShader(type);
+    gl.shaderSource(s,src);
+    gl.compileShader(s);
+    return s;
+}
+
+const prog = gl.createProgram();
+gl.attachShader(prog,createShader(gl.VERTEX_SHADER,vs));
+gl.attachShader(prog,createShader(gl.FRAGMENT_SHADER,fs));
+gl.linkProgram(prog);
+gl.useProgram(prog);
+gl.activeTexture(gl.TEXTURE0);
+
+const mvpLoc = gl.getUniformLocation(prog,"mvp");
+const colorLoc = gl.getUniformLocation(prog, "uColor");
+const useTexLoc = gl.getUniformLocation(prog, "useTexture");
+const brickScaleLoc = gl.getUniformLocation(prog, "brickScale");
+const faceIdLoc = gl.getUniformLocation(prog,"faceId");
+
+// =====================================================
+// Cube Geometry
+// =====================================================
+
+const cubeVerts = new Float32Array([
+    -0.5,-0.5,-0.5,  0.5,-0.5,-0.5,  0.5,0.5,-0.5,
+    -0.5,-0.5,-0.5,  0.5,0.5,-0.5, -0.5,0.5,-0.5,
+    -0.5,-0.5,0.5, 0.5,-0.5,0.5, 0.5,0.5,0.5,
+    -0.5,-0.5,0.5, 0.5,0.5,0.5, -0.5,0.5,0.5,
+    -0.5,-0.5,-0.5, -0.5,0.5,-0.5, -0.5,0.5,0.5,
+    -0.5,-0.5,-0.5, -0.5,0.5,0.5, -0.5,-0.5,0.5,
+     0.5,-0.5,-0.5, 0.5,0.5,-0.5, 0.5,0.5,0.5,
+     0.5,-0.5,-0.5, 0.5,0.5,0.5, 0.5,-0.5,0.5,
+    -0.5,-0.5,-0.5, -0.5,-0.5,0.5, 0.5,-0.5,0.5,
+    -0.5,-0.5,-0.5, 0.5,-0.5,0.5, 0.5,-0.5,-0.5,
+    -0.5,0.5,-0.5, -0.5,0.5,0.5, 0.5,0.5,0.5,
+    -0.5,0.5,-0.5, 0.5,0.5,0.5, 0.5,0.5,-0.5
+]);
+
+const uvs = new Float32Array([
+    0,0, 1,0, 1,1, 0,0, 1,1, 0,1,
+    0,0, 1,0, 1,1, 0,0, 1,1, 0,1,
+    0,0, 1,0, 1,1, 0,0, 1,1, 0,1,
+    0,0, 1,0, 1,1, 0,0, 1,1, 0,1,
+    0,0, 1,0, 1,1, 0,0, 1,1, 0,1,
+    0,0, 1,0, 1,1, 0,0, 1,1, 0,1
+]);
+
+
+const vbo = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER,vbo);
+gl.bufferData(gl.ARRAY_BUFFER,cubeVerts,gl.STATIC_DRAW);
+
+const posLoc = gl.getAttribLocation(prog,"position");
+gl.enableVertexAttribArray(posLoc);
+gl.vertexAttribPointer(posLoc,3,gl.FLOAT,false,0,0);
+
+const uvBuffer = gl.createBuffer();
+
+gl.bindBuffer(gl.ARRAY_BUFFER, uvBuffer);
+gl.bufferData(gl.ARRAY_BUFFER, uvs, gl.STATIC_DRAW);
+
+const uvLoc = gl.getAttribLocation(prog,"uv");
+gl.enableVertexAttribArray(uvLoc);
+gl.vertexAttribPointer(uvLoc,2,gl.FLOAT,false,0,0);
+
+gl.uniform1i(gl.getUniformLocation(prog,"tex"),0);
+
+
+
+const TextureRegistry = {};
+
+function loadTexture(gl, filePath, texName, repeats){
+    const tex = gl.createTexture();
+    
+    let t = {};
+    t.repeat = repeats;
+    t.tex = tex;
+    TextureRegistry[texName] = t;
+
+    const img = new Image();
+    img.src = filePath;
+
+    img.onload = function(){
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
+        gl.bindTexture(gl.TEXTURE_2D, tex);
+
+        try {
+            gl.texImage2D(
+                gl.TEXTURE_2D,
+                0,
+                gl.RGBA,
+                gl.RGBA,
+                gl.UNSIGNED_BYTE,
+                img
+            );
+        } catch(error){
+            console.log("loadTexture failed...retrying");
+            setTimeout(function(){
+                loadTexture(gl, filePath, texName, repeats);
+            }, 1000);
+        }
+
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+        gl.bindTexture(gl.TEXTURE_2D, null);
+    };
+}
+
+// Preload game textures here
+loadTexture(gl, "resources/texture.png", "texture", true);
+
+
+// =====================================================
+// Matrix Math
+// =====================================================
+
+function identity(){ return [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]; }
+
+function multiply(a,b){
+    let out=new Array(16);
+    for(let i=0;i<4;i++)
+        for(let j=0;j<4;j++)
+            out[j*4+i] =
+            a[0*4+i]*b[j*4+0]+
+            a[1*4+i]*b[j*4+1]+
+            a[2*4+i]*b[j*4+2]+
+            a[3*4+i]*b[j*4+3];
+    return out;
+}
+
+function translate(m,x,y,z){
+    let t=identity(); t[12]=x; t[13]=y; t[14]=z;
+    return multiply(m,t);
+}
+
+function scale(m,x,y,z){
+    let s=[x,0,0,0, 0,y,0,0, 0,0,z,0, 0,0,0,1];
+    return multiply(m,s);
+}
+
+function rotateX(m,a){ let c=Math.cos(a),s=Math.sin(a); let r=[1,0,0,0,0,c,-s,0,0,s,c,0,0,0,0,1]; return multiply(m,r); }
+function rotateY(m,a){ let c=Math.cos(a),s=Math.sin(a); let r=[c,0,s,0,0,1,0,0,-s,0,c,0,0,0,0,1]; return multiply(m,r); }
+function rotateZ(m,a){ let c=Math.cos(a),s=Math.sin(a); let r=[c,-s,0,0,s,c,0,0,0,0,1,0,0,0,0,1]; return multiply(m,r); }
+
+function perspective(fov,aspect,near,far){
+    let f=1/Math.tan(fov/2), nf=1/(near-far);
+    return [f/aspect,0,0,0,0,f,0,0,0,0,(far+near)*nf,-1,0,0,(2*far*near)*nf,0];
+}
+
+// =====================================================
+// LookAt (Arcball)
+function lookAt(eye,target,up){
+    const f = normalize([target[0]-eye[0],target[1]-eye[1],target[2]-eye[2]]);
+    const s = normalize(cross(f,up));
+    const u = cross(s,f);
+    return [
+        s[0],u[0],-f[0],0,
+        s[1],u[1],-f[1],0,
+        s[2],u[2],-f[2],0,
+        -dot(s,eye),-dot(u,eye),dot(f,eye),1
+    ];
+}
+function normalize(v){ let len=Math.hypot(...v); return v.map(x=>x/len);}
+function cross(a,b){ return [a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];}
+function dot(a,b){ return a[0]*b[0]+a[1]*b[1]+a[2]*b[2];}
+
+// =====================================================
+// Physics Setup / Q3
+// =====================================================
+
+// Create the scene
+const dt = 1 / 60;
+const scene = new q3Scene(dt);
+
+  
+// =====================================================
+// Base SceneObject & BrickObject
+// =====================================================
+
+function buildMatrixFromQ3Mat3(rot, pos, scaleVal) {
+    // rot = q3Mat3 (row-major: rows = right, up, forward)
+    // pos = {x, y, z}
+    // scaleVal = {x, y, z}
+
+    // Column-major WebGL matrix
+    let m = new Array(16).fill(0);
+
+    // Right vector (row 0) * scale.x
+    m[0] = rot.ex.x * scaleVal.x;
+    m[1] = rot.ex.y * scaleVal.x;
+    m[2] = rot.ex.z * scaleVal.x;
+    m[3] = 0;
+
+    // Up vector (row 1) * scale.y
+    m[4] = rot.ey.x * scaleVal.y;
+    m[5] = rot.ey.y * scaleVal.y;
+    m[6] = rot.ey.z * scaleVal.y;
+    m[7] = 0;
+
+    // Forward vector (row 2) * scale.z
+    m[8] = rot.ez.x * scaleVal.z;
+    m[9] = rot.ez.y * scaleVal.z;
+    m[10] = rot.ez.z * scaleVal.z;
+    m[11] = 0;
+
+    // Translation
+    m[12] = pos.x;
+    m[13] = pos.y;
+    m[14] = pos.z;
+    m[15] = 1;
+
+    return m;
+}
+    
+class SceneObject{
+    constructor(){
+        this.class = "SceneObject";
+        this.position = {x:0,y:0,z:0};
+        this.rotation = {x:0,y:0,z:0};
+        this.scaleVal = {x:1,y:1,z:1};
+        this.parent = null;
+        this.children = [];
+        this.worldMatrix = identity();
+    }
+  
+    addChild(c){
+      c.parent = this;
+      this.children.push(c);
+    }
+    
+    buildLocalMatrix(){
+        if (this.class == "BrickObject") {
+            // A valid "BrickObject" must be rendered using q3 rotation
+            var rot = q3IdentityMat3();
+            if (this.box){
+                // Compute world transform of box
+                const world = q3MulTransformTransform(this.body.m_tx, this.box.local);
+                rot = world.rotation;
+            }
+            return buildMatrixFromQ3Mat3(rot, this.position, this.scaleVal);
+        } else {
+            // For everything else, use euler angles to rotate the object
+            let m = identity();
+            m = translate(m,this.position.x, this.position.y, this.position.z);
+            m = rotateX(m, this.rotation.x);
+            m = rotateY(m, this.rotation.y);
+            m = rotateZ(m, this.rotation.z);
+            m = scale(m, this.scaleVal.x, this.scaleVal.y, this.scaleVal.z);
+            return m;
+        }
+    }
+  
+    updateWorldMatrix(parentMatrix){
+        if (this.class == "BrickObject")
+            this.updateFromPhysics();
+        let local = this.buildLocalMatrix();
+        if(parentMatrix){
+            let p = parentMatrix.slice();
+            let sx=Math.hypot(p[0],p[1],p[2]);
+            let sy=Math.hypot(p[4],p[5],p[6]);
+            let sz=Math.hypot(p[8],p[9],p[10]);
+            p[0]/=sx; p[1]/=sx; p[2]/=sx;
+            p[4]/=sy; p[5]/=sy; p[6]/=sy;
+            p[8]/=sz; p[9]/=sz; p[10]/=sz;
+            this.worldMatrix=multiply(p,local);
+        }else this.worldMatrix=local;
+        for(let c of this.children){
+            if (c.class == "BrickObject")
+                c.updateFromPhysics();
+            c.updateWorldMatrix(this.worldMatrix);
+        }
+    }
+  
+    render(viewProj, pass){
+        for(let c of this.children){
+            c.render(viewProj, pass);
+        }
+    }
+}
+
+const BrickColor = Object.freeze({
+    WHITE:{id:0,rgba:[1,1,1,1]},
+    RED:{id:1,rgba:[1,0,0,1]},
+    GREEN:{id:2,rgba:[0,1,0,1]},
+    BLUE:{id:3,rgba:[0,0,1,1]},
+    YELLOW:{id:4,rgba:[1,1,0,1]},
+    BLACK:{id:5,rgba:[0.1,0.1,0.1,1]}
+});
+
+// This is unreliable, only use for debugging
+function mat3ToEuler(m) {
+    // Extract matrix elements (column-major)
+    const m00 = m.ex.x, m01 = m.ey.x, m02 = m.ez.x;
+    const m10 = m.ex.y, m11 = m.ey.y, m12 = m.ez.y;
+    const m20 = m.ex.z, m21 = m.ey.z, m22 = m.ez.z;
+
+    let x, y, z;
+
+    // Pitch (X axis rotation)
+    if (Math.abs(m20) < 0.999999)
+    {
+        y = Math.asin(-m20);                   // yaw
+        x = Math.atan2(m21, m22);              // pitch
+        z = Math.atan2(m10, m00);              // roll
+    }
+    else
+    {
+        // Gimbal lock
+        y = Math.asin(-m20);
+        x = Math.atan2(-m12, m11);
+        z = 0;
+    }
+    
+    return { x, y, z };
+}
+
+    
+class BrickObject extends SceneObject
+{
+    constructor()
+    {
+        super();
+        this.class = "BrickObject";
+        this.name = "Brick";
+        this.color = BrickColor.WHITE;
+        this.frozen = true;
+        this.transparency = 0.0;
+        this.faceTextures = [
+            null, // 0
+            null, // 1
+            null, // 2
+            null, // 3
+            null, // 4
+            null  // 5
+        ];
+        
+        this.initPhysics();
+
+    }
+  
+    updateFromPhysics() {
+        if (this.box){
+            // Compute world transform of box
+            const world = q3MulTransformTransform(this.body.m_tx, this.box.local);
+          
+            this.position = world.position;
+
+            // Extract Euler rotation from rotation matrix if needed
+            this.rotation = mat3ToEuler(world.rotation);
+        }
+    }
+    
+    freePhysics()
+    {
+        if (this.box && this.body)
+        {
+            //this.body.RemoveBox(this.box);
+            scene.RemoveBody(this.body);
+            this.body = null;
+            this.box = null;
+        }
+    }
+    
+    initPhysics()
+    {
+        this.freePhysics();
+        
+        const baseDef = new q3BodyDef();
+        baseDef.bodyType = this.frozen ? eStaticBody : eDynamicBody;
+        baseDef.position = new q3Vec3(this.position.x, this.position.y, this.position.z);
+        
+        const baseBody = scene.CreateBody(baseDef, scene);
+        const baseBoxDef = new q3BoxDef();
+        
+        var tx = new q3Transform();
+        q3IdentityTransform(tx);
+        baseBoxDef.set(tx, new q3Vec3(this.scaleVal.x, this.scaleVal.y, this.scaleVal.z));
+        
+        if (this.frozen) {
+            baseBoxDef.m_density = 0; // static bodies don't need mass
+        } else {
+            baseBoxDef.m_density = 1.0;
+            baseBoxDef.m_friction = 0.5;
+            baseBoxDef.m_restitution = 0.2;
+        }
+
+        this.box = baseBody.AddBox(baseBoxDef);
+        this.body = baseBody;
+
+        baseBody.SetToAwake();
+    }
+    
+    setScale(size){
+        if (this.box)
+        {
+            this.scaleVal = size;
+            this.initPhysics();
+        }
+    }
+    
+    setPosition(pos){
+        if (this.box && this.body)
+        {
+            this.position.x = pos.x;
+            this.position.y = pos.y;
+            this.position.z = pos.z;
+            this.body.SetTransform(new q3Vec3(pos.x, pos.y, pos.z));
+        }
+    }
+    
+    setName(name){ this.name = name; }
+    setFrozen(fr){ this.frozen = fr; this.initPhysics(); }
+    setColor(c){ this.color = c; }
+    setTransparency(t){ this.transparency = Math.max(0,Math.min(1,t)); }
+    
+    render(viewProj, pass){
+        if(pass === RENDER_OPAQUE && this.transparency > 0){
+            super.render(viewProj, pass);
+            return;
+        }
+        if(pass === RENDER_TRANSPARENT && this.transparency === 0){
+            super.render(viewProj, pass);
+            return;
+        }
+        
+        let final = multiply(viewProj,this.worldMatrix);
+
+        gl.uniformMatrix4fv(mvpLoc,false,new Float32Array(final));
+
+        let rgba = this.color.rgba.slice();
+        rgba[3] = 1.0 - this.transparency;
+
+        gl.uniform4fv(colorLoc,new Float32Array(rgba));
+
+        // draw each cube face separately
+        for(let i = 0; i < 6; i++){
+            let t = this.faceTextures[i];
+
+            if(t){                
+                gl.bindTexture(gl.TEXTURE_2D, t.tex);
+                gl.uniform1f(useTexLoc, 1.0);
+            } else {
+                gl.bindTexture(gl.TEXTURE_2D, null);
+                gl.uniform1f(useTexLoc, 0.0);
+            }
+
+            gl.uniform1i(faceIdLoc, i);
+            
+            if (t && t.repeat){
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+                gl.uniform3f(brickScaleLoc,
+                this.scaleVal.x,
+                this.scaleVal.y,
+                this.scaleVal.z);
+            } else {
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+                gl.uniform3f(brickScaleLoc,
+                1.0,
+                1.0,
+                1.0);
+            }
+            gl.drawArrays(gl.TRIANGLES,i*6,6);
+        }
+
+        super.render(viewProj, pass);
+    }
+}
+
+BrickObject.prototype.setTexture = function(face_id, texName){
+    if(face_id < 0 || face_id > 5) return;
+
+    const t = TextureRegistry[texName];
+    if(!t){
+        console.warn("Texture not found:", texName);
+        return;
+    }
+
+    this.faceTextures[face_id] = t;
+};
+
+
+
+// =====================================================
+// Arcball Camera
+// =====================================================
+
+class ArcballCamera {
+    constructor(canvas, subject=[0,0,0], distance=20){
+        this.subject = subject;
+        this.distance = distance;
+        this.yaw=0; this.pitch=0;
+        this.velYaw=0; this.velPitch=0;
+        this.sensitivity=0.005; this.friction=0.92;
+        this.maxPitch=Math.PI/2-0.05;
+        this.lastX=null; this.lastY=null;
+        this.lastDist = null;
+        this.cameraTouchId = null;
+    }
+
+    update(){
+        this.yaw += this.velYaw;
+        this.pitch += this.velPitch;
+        if(this.pitch>this.maxPitch) this.pitch=this.maxPitch;
+        if(this.pitch<-this.maxPitch) this.pitch=-this.maxPitch;
+        this.velYaw *= this.friction;
+        this.velPitch *= this.friction;
+    }
+
+    getViewProjection(){
+        const eye = [
+            this.subject[0] + this.distance*Math.cos(this.pitch)*Math.sin(this.yaw),
+            this.subject[1] + this.distance*Math.sin(this.pitch),
+            this.subject[2] + this.distance*Math.cos(this.pitch)*Math.cos(this.yaw)
+        ];
+        const view = lookAt(eye, this.subject, [0,1,0]);
+        return multiply(perspective(Math.PI/3, canvas.width/canvas.height, 0.1, 100), view);
+    }
+}
+
+
+// =====================================================
+// Scene Setup
+// =====================================================
+
+let sceneObjects = [];
+
+let base = new BrickObject();
+base.setName("Base");
+base.setScale({x:25, y:1.0, z:25});
+base.color = BrickColor.GREEN;
+base.setPosition({x:0, y:-3.0, z:0});
+
+for(let i = 0; i < 3;  i++){
+    for(let j = 0; j < 4;  j++){
+        let child = new BrickObject();
+        child.setName("Cube");
+        child.setFrozen(false);
+        child.setScale({x:2, y:2, z:2});
+        child.setPosition({x:i*2-1.5, y:20.0, z:j*2-1.5});
+        child.setTransparency(0.3);
+        child.color = BrickColor.BLUE;
+        sceneObjects.push(child);
+    }
+}
+sceneObjects.push(base);
+
+// =====================================================
+// Engine Loop
+// =====================================================
+
+const camera = new ArcballCamera(canvas,[0,0,0],20);
+
+function loop(){
+    scene.Step();
+    
+    camera.update();
+    camera.subject = [0,3,10]; // (Original static subject commented out)
+
+    gl.clearColor(0.05,0.05,0.08,1);
+    gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+
+    let viewProj = camera.getViewProjection();
+
+    // update transforms
+    for(let obj of sceneObjects){
+        obj.updateWorldMatrix();
+    }
+
+    // opaque pass
+    for(let obj of sceneObjects){
+        obj.render(viewProj, RENDER_OPAQUE);
+    }
+
+    // transparent pass
+    gl.depthMask(false);
+
+    for(let obj of sceneObjects){
+        obj.render(viewProj, RENDER_TRANSPARENT);
+    }
+
+    gl.depthMask(true);
+    
+    requestAnimationFrame(loop);
+}
+
+loop();
+
+</script>
+</body>
+</html>
