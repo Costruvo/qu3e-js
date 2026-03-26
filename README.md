@@ -1,25 +1,25 @@
 # qu3e-js
 
-This is a 1:1 javascript port of the lightweight 3D physics engine "qu3e" for use in browsers.[br]
+This is a 1:1 javascript port of the lightweight 3D physics engine "qu3e" for use in browsers.<br>
 
-[![Demo](https://imgur.com/a/vOdl3g1)](https://imgur.com/a/vOdl3g1)
+[![Demo](https://imgur.com/a/vOdl3g1)](https://imgur.com/a/vOdl3g1)<br>
 
-[![Demo](https://imgur.com/1jLcZqr)](https://imgur.com/1jLcZqr)
+[![Demo](https://imgur.com/1jLcZqr)](https://imgur.com/1jLcZqr)<br>
 
 
 # Purpose
 
-I decided to do this for a 3D game I've developed that I'd like to port to JS, so that it's playable in browsers (and be supported across many devices/platforms).[br]
-I needed physics to be synchronized across all clients, and also be fast enough to run on an iPhone, and what better way to do that than with the same engine.[br]
+I did this for a 3D game I'm developing that I'd like to port to JS, so that it's playable in browsers (and supported on many devices).<br><br>
+I needed physics to be synchronized across all clients, and also be fast enough to run on an iPhone, and what better way to do that than with the same engine.<br>
 
 # Important
 
-This port needs a tiny bit of improving, mostly at different object scales, which can be seen in the demos.[br]
-They usually collide and generate the correct impulses, and other times the impulse is a bit too extreme.[br]
-It rarely misses a collision (an object will randomly fall through what it's on top of, or go inside another).[br]
-Nonetheless the majority of collisions are a success.[br]
+This port needs a tiny bit of improving, mostly with different object scales, which can be seen in the demos.<br>
+They usually collide and generate the correct impulses, but other times the impulse is a bit extreme.<br>
+It rarely misses a collision, but when it does the object will randomly fall through what it's on, or go inside another.<br>
+But it usually corrects itself.<br>
 
-Any help is appreciated :)[br]
-
+Any help with fine-tuning this is much appreciated<br>
+<br>
 
 All credits go to Randy Gaul
