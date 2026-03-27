@@ -1,6 +1,6 @@
 # qu3e-js
 
-A 1:1 javascript port of the lightweight 3D physics engine "qu3e" for use in browsers. Here's a demo:<br>
+A 1:1 javascript port of the 3D physics engine "qu3e" for use in browsers. Here's a demo:<br>
 
 ![hippo](https://raw.githubusercontent.com/Costruvo/qu3e-js/refs/heads/main/bandicam%202026-03-26%2014-17-44-088.gif)
 
