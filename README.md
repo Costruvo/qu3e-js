@@ -11,7 +11,7 @@ I needed physics to be synchronized across all clients, and also be fast enough 
 
 # Release Notes
 
-![hippo](https://raw.githubusercontent.com/Costruvo/qu3e-js/refs/heads/main/bandicam%202026-03-26%2014-18-35-016.gif)
+![hippo](https://raw.githubusercontent.com/Costruvo/qu3e-js/refs/heads/main/bandicam%202026-03-26%2014-18-35-016.gif)<br>
 As seen in this demo, it very seldom misses a collision, but it usually corrects itself. I'll continue improving over time<br>
 
 All credits to Randy Gaul
