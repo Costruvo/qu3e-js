@@ -11,10 +11,7 @@ I needed physics to be synchronized across all clients, and also be fast enough 
 
 # Release Notes
 
-This port needs a little fine-tuning, mainly at different object scales (see below).<br>
 ![hippo](https://raw.githubusercontent.com/Costruvo/qu3e-js/refs/heads/main/bandicam%202026-03-26%2014-18-35-016.gif)
+As seen in this demo, it very seldom misses a collision, but it usually corrects itself. I'll continue improving over time<br>
 
-Every 9 out of 10 times they collide and generate the correct impulses, but sometimes the impulse is a little extreme.<br>
-It rarely misses a collision, but it usually corrects itself. Help is appreciated + I'll continue updating this over time<br>
-
-All credits go to Randy Gaul
+All credits to Randy Gaul
