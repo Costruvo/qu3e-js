@@ -161,10 +161,10 @@ class q3ContactSolver {
                 // Friction
                 if (this.m_enableFriction) {
                     for (let k = 0; k < 2; ++k) {
-                        let lambda = -q3Dot(dv, cs.tangentVectors[k]) * c.tangentMass[k];
-                        let maxLambda = (cs.friction * -0.3) * c.normalImpulse;
+                        let lambda = -q3Dot(dv, cs.tangentVectors[k]) * c.tangentMass[k]; // drift issues are originating here
+                        let maxLambda = (cs.friction * -0.3 /*please ignore :(*/) * c.normalImpulse;
                         
-                        lambda *= (c.tangentMass[k] / (cs.friction * 200.0));
+                        lambda *= (c.tangentMass[k] / (cs.friction * 200.0)); // not a good fix, but it balances out
 
                         let oldPT = c.tangentImpulse[k];
                         c.tangentImpulse[k] = q3Clamp(-maxLambda, maxLambda, oldPT + lambda);
