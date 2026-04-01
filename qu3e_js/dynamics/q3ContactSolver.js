@@ -162,9 +162,9 @@ class q3ContactSolver {
                 if (this.m_enableFriction) {
                     for (let k = 0; k < 2; ++k) {
                         let lambda = -q3Dot(dv, cs.tangentVectors[k]) * c.tangentMass[k];
-                        let maxLambda = (cs.friction * -.3) * c.normalImpulse;
+                        let maxLambda = (cs.friction * -0.3) * c.normalImpulse;
                         
-                        lambda *= (c.tangentMass[k] / (cs.friction * 200));
+                        lambda *= (c.tangentMass[k] / (cs.friction * 200.0));
 
                         let oldPT = c.tangentImpulse[k];
                         c.tangentImpulse[k] = q3Clamp(-maxLambda, maxLambda, oldPT + lambda);
@@ -177,8 +177,6 @@ class q3ContactSolver {
 
                         vB = vB.add(impulse.mulScalar(cs.mB));
                         wB = wB.add(q3MulMat3Vec3(cs.iB, q3Cross(c.rb, impulse)));
-
-
                     }
                 }
 
