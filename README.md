@@ -11,4 +11,7 @@ I needed physics to be synchronized across all clients, and also be fast enough 
 
 # Release Notes
 
+A full demo is included. Render/debug functions are ported but are N/A (and so is file dumping). I just plug it straight into WebGL.
+
+
 All credits to Randy Gaul
