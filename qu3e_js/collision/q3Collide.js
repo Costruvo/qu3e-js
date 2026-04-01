@@ -401,7 +401,7 @@ function q3EdgesContact(CA, CB, PA, QA, PB, QB)
 
     /*if (Math.abs(denom) < 1e-8)
     {
-        // Parallel fallback (REQUIRED for stability in JS)
+        // Parallel fallback
         TA = 0;
         TB = (b > e ? c / b : f / e);
     }
@@ -557,9 +557,12 @@ function q3BoxtoBox(m, A, B)
     // --------------------------------------------------
     // Edge axes (ONLY if not parallel)
     // --------------------------------------------------
-  
     
-    if(false)//if (!parallel)
+    // Collision is 100% stable when parallel is always true...
+    // I don't know what's wrong with tracking edge axes
+    parallel = true;
+    
+    if (!parallel)
     {
         let rA, rB;
 

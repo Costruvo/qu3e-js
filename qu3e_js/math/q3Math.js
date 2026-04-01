@@ -52,9 +52,8 @@ function q3Max(a, b)
 
 //--------------------------------------------------------------------------------------------------
 
-function q3Clamp(val, min, max)
+function q3Clamp(min, max, val)
 {
-    if (isNaN(val)) return min; // safety fallback
     if (val < min) return min;
     if (val > max) return max;
     return val;
@@ -62,7 +61,6 @@ function q3Clamp(val, min, max)
 
 function q3Clamp01(val)
 {
-    if (isNaN(val)) return 0;
     if (val <= 0.0) return 0;
     if (val >= 1.0) return 1;
     return val;
