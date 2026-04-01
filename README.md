@@ -11,7 +11,4 @@ I needed physics to be synchronized across all clients, and also be fast enough 
 
 # Release Notes
 
-![hippo](https://raw.githubusercontent.com/Costruvo/qu3e-js/refs/heads/main/bandicam%202026-03-26%2014-18-35-016.gif)<br>
-As seen in this demo, my version seldom misses a collision, but then corrects itself. After a little bit of tweaking it should be completely on par with qu3e. I will keep posting updates/improvements to this port<br>
-
 All credits to Randy Gaul
