@@ -110,6 +110,10 @@ class q3AABB {
         this.min = q3MinVec3(this.min, other.min);
         this.max = q3MaxVec3(this.max, other.max);
     }
+
+    clone(){
+        return new q3AABB(this.min.clone(), this.max.clone());
+    }
 }
 
 function q3AABBtoAABB(a, b) {
@@ -120,8 +124,22 @@ function q3AABBtoAABB(a, b) {
 }
 
 function q3Combine(a, b) {
+    let out = new q3AABB();
+    out.min.x = Math.min(a.min.x, b.min.x);
+    out.min.y = Math.min(a.min.y, b.min.y);
+    out.min.z = Math.min(a.min.z, b.min.z);
+
+    out.max.x = Math.max(a.max.x, b.max.x);
+    out.max.y = Math.max(a.max.y, b.max.y);
+    out.max.z = Math.max(a.max.z, b.max.z);
+
+    return out;
+}
+/*
+function q3Combine(a, b) {
     return new q3AABB(q3MinVec3(a.min, b.min), q3MaxVec3(a.max, b.max));
 }
+*/
 
 function q3ClosestPointOnAABB(point, aabbMin, aabbMax) {
     return new q3Vec3(
@@ -135,12 +153,12 @@ function q3ClosestPointOnAABB(point, aabbMin, aabbMax) {
 // q3Closest point on line
 //--------------------------------------------------------------------------------------------------
 function q3ClosestPointLineSegment(a, b, p) {
-    const ab = b.sub(a);
+    const ab = b.clone().sub(a);
     const lenSq = q3LengthSqVec3(ab);
     let t = 0.0;
-    if(lenSq>0) t = q3Dot(ab, p.sub(a)) / lenSq;
+    if(lenSq>0) t = q3Dot(ab, p.clone().sub(a)) / lenSq;
     t = q3Clamp01(t);
-    return a.add(ab.mul(t));
+    return a.clone().add(ab.clone().mul(t));
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -200,10 +218,10 @@ function q3ComputeBasis(a, tangentVectors) {
         b.Set(0.0, a.z, -a.y);
     }
 
-    a.normalizeEq();
-    b.normalizeEq(); // modify b -- does not clone()
+    //a.normalizeEq();
+    //b.normalizeEq(); // modify b -- does not clone()
 
     const cross = q3Cross(a, b);
     c.Set(cross.x, cross.y, cross.z);
-    c.normalizeEq();
+    //c.normalizeEq();
 }

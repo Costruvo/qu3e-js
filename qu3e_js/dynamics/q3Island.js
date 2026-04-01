@@ -12,6 +12,10 @@ class q3Island {
         this.m_bodyCapacity = bodyCapacity;
         this.m_bodyCount = 0;
 
+        //for (let i = 0; i < bodyCapacity; ++i){
+        //    this.m_velocities[i] = new q3VelocityState();
+        //}
+
         this.m_contacts = new Array(contactCapacity);   // q3ContactConstraint[]
         this.m_contactStates = new Array(contactCapacity); // q3ContactConstraintState[]
         this.m_contactCapacity = contactCapacity;
@@ -26,23 +30,22 @@ class q3Island {
     }
 
     AddBody(body) {
-        if (this.m_bodyCount < this.m_bodyCapacity) {
-            this.m_bodies[this.m_bodyCount] = body;
-            this.m_velocities[this.m_bodyCount] = new q3VelocityState();
-            this.m_bodyCount++;
-        } else {
-            console.warn("q3Island body capacity exceeded");
-        }
+        if (this.m_bodyCount < this.m_bodyCapacity)
+            this.m_bodyCapacity *= 2;
+        
+        body.m_islandIndex = this.m_bodyCount;
+        this.m_bodies[this.m_bodyCount] = body;
+        this.m_velocities[this.m_bodyCount] = new q3VelocityState();
+        this.m_bodyCount++;
     }
 
     AddContact(contact) {
-        if (this.m_contactCount < this.m_contactCapacity) {
-            this.m_contacts[this.m_contactCount] = contact;
-            this.m_contactStates[this.m_contactCount] = new q3ContactConstraintState();
-            this.m_contactCount++;
-        } else {
-            console.warn("q3Island contact capacity exceeded");
-        }
+        if (this.m_contactCount < this.m_contactCapacity)
+            this.m_contactCapacity *= 2;
+
+        this.m_contacts[this.m_contactCount] = contact;
+        this.m_contactStates[this.m_contactCount] = new q3ContactConstraintState();
+        this.m_contactCount++;
     }
 
     Initialize() {
@@ -53,47 +56,49 @@ class q3Island {
             vel.v = body.m_linearVelocity.clone();
             vel.w = body.m_angularVelocity.clone();
         }
+
       
         // Initialize contacts
         for (let i = 0; i < this.m_contactCount; ++i) {
-            let cs = this.m_contactStates[i];
-            let cc = this.m_contacts[i];
+            let cs = this.m_contactStates[i]; // cs = q3ContactConstraintState*
+            let cc = this.m_contacts[i]; // cc = q3ContactConstraint*
 
-            cs.contactCount = cc.manifold.contactCount;
-            cs.normal = cc.manifold.normal.clone();
-            cs.centerA = cc.bodyA.m_worldCenter;
-            cs.centerB = cc.bodyB.m_worldCenter;
+            cs.centerA = cc.bodyA.m_worldCenter.clone();
+            cs.centerB = cc.bodyB.m_worldCenter.clone();
             cs.iA = cc.bodyA.m_invInertiaWorld.clone();
             cs.iB = cc.bodyB.m_invInertiaWorld.clone();
             cs.mA = cc.bodyA.m_invMass;
             cs.mB = cc.bodyB.m_invMass;
-            cs.friction = cc.friction;
             cs.restitution = cc.restitution;
-            cs.indexA = this.m_bodies.indexOf(cc.bodyA);
-            cs.indexB = this.m_bodies.indexOf(cc.bodyB);
+            cs.friction = cc.friction;
+            cs.indexA = cc.bodyA.m_islandIndex;//this.m_bodies.indexOf(cc.bodyA);
+            cs.indexB = cc.bodyB.m_islandIndex;//this.m_bodies.indexOf(cc.bodyB);
+            cs.normal = cc.manifold.normal.clone();
+            cs.tangentVectors[0] = cc.manifold.tangentVectors[0].clone();
+            cs.tangentVectors[1] = cc.manifold.tangentVectors[1].clone();
+            cs.contactCount = cc.manifold.contactCount;
 
             for (let j = 0; j < cs.contactCount; ++j) {
-                let c = cs.contacts[j];
-                let mc = cc.manifold.contacts[j];
-                c.ra = mc.position.clone().sub(cc.bodyA.m_worldCenter);
-                c.rb = mc.position.clone().sub(cc.bodyB.m_worldCenter);
+                let c = cs.contacts[j]; // c = q3ContactState*
+                let mc = cc.manifold.contacts[j]; // mc = q3Contact*
+                c.ra = mc.position.clone().sub(cs.centerA);
+                c.rb = mc.position.clone().sub(cs.centerB);
                 c.penetration = mc.penetration;
                 c.normalImpulse = mc.normalImpulse;
                 c.tangentImpulse[0] = mc.tangentImpulse[0];
                 c.tangentImpulse[1] = mc.tangentImpulse[1];
             }
 
-            cs.tangentVectors[0] = cc.manifold.tangentVectors[0];
-            cs.tangentVectors[1] = cc.manifold.tangentVectors[1];
-            
+            /*
             // Compute tangent vectors here (optional)
-            //let n = cs.normal;
-            //if (Math.abs(n.x) >= 0.57735) { // 1/sqrt(3)
-            //    cs.tangentVectors[0] = q3Normalize(new q3Vec3(n.y, -n.x, 0));//.normalize();
-            //} else {
-            //    cs.tangentVectors[0] = q3Normalize(new q3Vec3(0, n.z, -n.y));//.normalize();
-            //}
-            //cs.tangentVectors[1] = q3Cross(n, cs.tangentVectors[0]);
+            let n = cs.normal;
+            if (Math.abs(n.x) >= 0.57735) { // 1/sqrt(3)
+                cs.tangentVectors[0] = q3Normalize(new q3Vec3(n.y, -n.x, 0));//.normalize();
+            } else {
+                cs.tangentVectors[0] = q3Normalize(new q3Vec3(0, n.z, -n.y));//.normalize();
+            }
+            cs.tangentVectors[1] = q3Cross(n, cs.tangentVectors[0]);
+            */
         }
     }
 
@@ -111,15 +116,12 @@ class q3Island {
 
             if (body.m_flags & q3Body.eDynamic)
             {
-                // Apply gravity force (NOTE: qu3e multiplies by mass internally)
-                const gravityForce = this.m_gravity.scale(body.m_gravityScale * body.m_mass);
-                body.m_force = body.m_force.add(gravityForce);
+                body.ApplyLinearForce(this.m_gravity.scale(body.m_gravityScale * body.m_mass));
 
                 // --- World inertia ---
                 const R = body.m_tx.rotation;
-                const Rt = q3Transpose(R);
                 body.m_invInertiaWorld =
-                    q3MulMat3(q3MulMat3(R, body.m_invInertiaModel), Rt);
+                    q3MulMat3(q3MulMat3(R, body.m_invInertiaModel), q3Transpose(R));
 
                 // --- Integrate velocity ---
                 body.m_linearVelocity =
@@ -132,19 +134,17 @@ class q3Island {
                 // --- Damping ---
                 const linDamp = 1.0 / (1.0 + dt * body.m_linearDamping);
                 const angDamp = 1.0 / (1.0 + dt * body.m_angularDamping);
-
+                
                 body.m_linearVelocity = body.m_linearVelocity.scale(linDamp);
                 body.m_angularVelocity = body.m_angularVelocity.scale(angDamp);
                 
-                // DRIFT PATCH --> This is the only thing I've added that diverges
-                // from qu3e's source, and has helped gradual drifting.
-                // Other things that I found helped was tightening the parallel
-                // face detection in boxtobox.
-                //
+                
+                // DRIFT PREVENTION
                 const kRestTol = 0.1;
                 if (Math.abs(body.m_linearVelocity.x) < kRestTol) body.m_linearVelocity.x = 0;
                 if (Math.abs(body.m_linearVelocity.y) < kRestTol) body.m_linearVelocity.y = 0;
                 if (Math.abs(body.m_linearVelocity.z) < kRestTol) body.m_linearVelocity.z = 0;
+                
             }
 
             // Copy into island buffers
@@ -189,11 +189,6 @@ class q3Island {
             body.m_q = q3NormalizeQuat(body.m_q);
 
             body.m_tx.rotation = body.m_q.ToMat3();
-
-            body.m_tx.position =
-                body.m_worldCenter.sub(
-                    q3MulMat3Vec3(body.m_tx.rotation, body.m_localCenter)
-                );
         }
         
         if (this.m_allowSleep) {

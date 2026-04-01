@@ -26,8 +26,8 @@ class q3BoxDef {
         this.m_tx.position = new q3Vec3(0,0,0);
         this.m_tx.rotation = q3IdentityMat3();
 
-        this.m_friction = 0.04;
-        this.m_restitution = 0.02;
+        this.m_friction = 0.4;
+        this.m_restitution = 0.2;
         this.m_density = 1.0;
         this.m_sensor = false;
     }
@@ -82,9 +82,14 @@ class q3Box {
         const world = q3MulTransformTransform(tx, this.local);
         const p0 = q3MulT(world, p);
 
-        return Math.abs(p0.x) <= this.e.x &&
-               Math.abs(p0.y) <= this.e.y &&
-               Math.abs(p0.z) <= this.e.z;
+        const eArr = [this.e.x, this.e.y, this.e.z];
+        const pArr = [p0.x, p0.y, p0.z];
+
+        for (let i = 0; i < 3; i++) {
+            if (pArr[i] > eArr[i] || pArr[i] < -eArr[i]) return false;
+        }
+
+        return true;
     }
 
     computeAABB(tx, aabb) {
@@ -123,16 +128,20 @@ class q3Box {
 
         const mass = 8.0 * this.e.x * this.e.y * this.e.z * this.density;
 
+        // Diagonal inertia tensor for box at origin
         const x = (1/12) * mass * (ey2 + ez2);
         const y = (1/12) * mass * (ex2 + ez2);
         const z = (1/12) * mass * (ex2 + ey2);
-
         let I = q3Diagonal(x, y, z);
+
+        // Transform to world/local orientation
         I = q3MulMat3(this.local.rotation, I, q3Transpose(this.local.rotation));
 
+        // Parallel axis theorem: shift inertia by center offset
         const identity = q3IdentityMat3();
         const outer = q3OuterProduct(this.local.position, this.local.position);
-        I = q3AddMat3(I, q3SubMat3(q3MulScalar(identity, mass), outer));
+        const shift = q3SubMat3(q3MulScalar(identity, q3Dot(this.local.position, this.local.position)), outer);
+        I = q3AddMat3(I, q3MulScalar(shift, mass));
 
         md.center = this.local.position.clone();
         md.inertia = I;

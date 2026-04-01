@@ -130,12 +130,12 @@ function q3Inverse(m)
 
     const det = q3Dot(m.ez, tmp2);
 
-    if (Math.abs(det) < 1e-9)
+    /*if (Math.abs(det) < 1e-9)
     {
         let fallback = new q3Mat3();
         fallback.SetIdentity();
         return fallback;
-    }
+    }*/
 
     const invDet = 1 / det;
 

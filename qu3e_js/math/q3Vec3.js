@@ -106,9 +106,9 @@ function q3Dot(a, b) {
 
 function q3Cross(a, b) {
     return new q3Vec3(
-        (a.y*b.z - a.z*b.y),
-        (a.z*b.x - a.x*b.z),
-        (a.x*b.y - a.y*b.x)
+        ((a.y*b.z) - (b.y*a.z)),
+        ((b.x*a.z) - (a.x*b.z)),
+        ((a.x*b.y) - (b.x*a.y))
     );
 }
 
@@ -126,6 +126,10 @@ function q3LengthSq(v) {
 
 // Modification: avoids returning (1,0,0) blindly if the vector is nearly zero but has small components.
 // This prevents NaNs in rotations or cross products.
+function q3Normalize(v){
+    return v.clone().normalizeEq();
+}
+/*
 function q3Normalize(v)
 {
     let len = Math.sqrt(v.x*v.x + v.y*v.y + v.z*v.z);
@@ -137,7 +141,7 @@ function q3Normalize(v)
     if (Math.abs(v.x) >= Math.abs(v.y) && Math.abs(v.x) >= Math.abs(v.z)) return new q3Vec3(1,0,0);
     if (Math.abs(v.y) >= Math.abs(v.z)) return new q3Vec3(0,1,0);
     return new q3Vec3(0,0,1);
-}
+}*/
 
 
 

@@ -5,7 +5,7 @@
 //--------------------------------------------------------------------------------------------------
 
 class q3Scene {
-    constructor(dt, gravity = new q3Vec3(0, -9.8, 0), iterations = 20) {
+    constructor(dt, gravity = new q3Vec3(0, -9.8, 0), iterations = 12) {
         this.m_dt = dt;
         this.m_gravity = gravity;
         this.m_iterations = iterations;
@@ -33,7 +33,10 @@ class q3Scene {
 
         // Clear island flags
         for (let body = this.m_bodyList; body; body = body.next)
+        {
             body.m_flags &= ~q3Body.eIsland;
+            body.m_islandIndex = undefined;
+        }
 
         // Prepare island
         let island = new q3Island();
@@ -49,9 +52,9 @@ class q3Scene {
         const stack = new Array(stackSize);
 
         for (let seed = this.m_bodyList; seed; seed = seed.next) {
-            if (seed.m_flags & q3Body.eIsland) continue;
-            if (!(seed.m_flags & q3Body.eAwake)) continue;
-            if (seed.m_flags & q3Body.eStatic) continue;
+            if (seed.m_flags & q3Body.eIsland) continue; // Seed cannot be apart of an island already
+            if (!(seed.m_flags & q3Body.eAwake)) continue; // Seed must be awake
+            if (seed.m_flags & q3Body.eStatic) continue; // Seed cannot be a static body in order to keep islands as small as possible
 
             let stackCount = 0;
             stack[stackCount++] = seed;
@@ -64,10 +67,17 @@ class q3Scene {
             while (stackCount > 0) {
                 let body = stack[--stackCount];
                 island.AddBody(body);
+
+                // Awaken all bodies connected to
                 body.SetToAwake();
 
+                // Do not search across static bodies to keep island
+                // formations as small as possible, however the static
+                // body itself should be apart of the island in order
+                // to properly represent a full contact
                 if (body.m_flags & q3Body.eStatic) continue;
 
+                
                 let edge = body.m_contactList;
                 while (edge) {
                     const contact = edge.constraint;
@@ -89,12 +99,15 @@ class q3Scene {
 
                     contact.m_flags |= q3ContactConstraint.eIsland;
                     island.AddContact(contact);
-
+                    
                     const other = edge.other;
-                    if (!(other.m_flags & q3Body.eIsland)) {
-                        stack[stackCount++] = other;
-                        other.m_flags |= q3Body.eIsland;
+                    if (other.m_flags & q3Body.eIsland) {
+                        edge = edge.next;
+                        continue;
                     }
+
+                    stack[stackCount++] = other;
+                    other.m_flags |= q3Body.eIsland;
 
                     edge = edge.next;
                 }
@@ -108,6 +121,7 @@ class q3Scene {
             // Reset static body island flags
             for (let i = 0; i < island.m_bodyCount; i++) {
                 let body = island.m_bodies[i];
+                
                 if (body.m_flags & q3Body.eStatic)
                     body.m_flags &= ~q3Body.eIsland;
             }
@@ -136,7 +150,6 @@ class q3Scene {
         body.next = this.m_bodyList;
         if (this.m_bodyList) this.m_bodyList.prev = body;
         this.m_bodyList = body;
-
         this.m_bodyCount++;
         return body;
     }

@@ -11,7 +11,7 @@ class q3BodyDef {
 
 constructor()
 {
-    this.axis = new q3Vec3(1,0,0);
+    this.axis = new q3Vec3(0,0,0);
     this.angle = 0;
 
     this.position = new q3Vec3();
@@ -23,12 +23,12 @@ constructor()
     this.layers = 1;
     this.userData = null;
 
-    this.linearDamping = 0; // 0
-    this.angularDamping = 0.1; // 0.1
+    this.linearDamping = 0;
+    this.angularDamping = 0.1;
 
     this.bodyType = eStaticBody;
 
-    this.allowSleep = true;
+    this.allowSleep = false;
     this.awake = true;
     this.active = true;
 
@@ -52,12 +52,12 @@ constructor(def, scene)
     this.m_force = new q3Vec3();
     this.m_torque = new q3Vec3();
 
-    this.m_q = new q3Quaternion();
+    this.m_q = new q3Quaternion(0,0,0,1);
     
     let axis = def.axis;
 
     if (!axis || (axis.x === 0 && axis.y === 0 && axis.z === 0)) {
-        axis = new q3Vec3(1, 0, 0);
+        axis = new q3Vec3(0, 0, 0);
     }
 
     this.m_q.SetFromAxisAngle(q3Normalize(axis), def.angle || 0);
@@ -473,8 +473,7 @@ CalculateMassData()
         lc = lc.scale(this.m_invMass);
 
         
-        let identity = new q3Mat3();
-        q3Identity(identity);
+        let identity = q3IdentityMat3();
 
         let I = identity.mulScalar(q3Dot(lc, lc));
         let outer = q3OuterProduct(lc, lc);
@@ -516,12 +515,8 @@ SynchronizeProxies()
     {
         box.computeAABB(tx, aabb);
         
-        if (box.broadPhaseIndex >= 0) {
+        if (box.broadPhaseIndex >= 0)
             broadphase.Update(box.broadPhaseIndex, aabb);
-        } else {
-            box.broadPhaseIndex = broadphase.InsertBox(box, aabb);
-            //broadphase.Update(box.broadPhaseIndex, aabb);
-        }
 
         box = box.next;
     }

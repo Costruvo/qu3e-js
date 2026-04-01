@@ -100,14 +100,6 @@ class q3Mat3 {
     }
 }
 
-q3Mat3.prototype.mulVec3 = function(v) {
-    return new q3Vec3(
-        this.ex.x * v.x + this.ey.x * v.y + this.ez.x * v.z,
-        this.ex.y * v.x + this.ey.y * v.y + this.ez.y * v.z,
-        this.ex.z * v.x + this.ey.z * v.y + this.ez.z * v.z
-    );
-};
-
 //--------------------------------------------------------------------------------------------------
 // Matrix operations
 //--------------------------------------------------------------------------------------------------
@@ -121,7 +113,29 @@ function q3MulMat3Vec3(m, rhs)
     );
 }
 
-function q3MulMat3(A, B)
+q3Mat3.prototype.mulVec3 = function(rhs) {
+    return q3MulMat3Vec3(this, rhs);
+};
+
+function q3MulMat3(A, B, C = null) {
+    // If a third argument is provided, assume it's a "post-multiply" or transform
+    if (C) {
+        // Do A * B * C
+        const AB = q3MulMat3(A, B);  // reuse the same function for first two
+        return q3MulMat3(AB, C);     // multiply result by C
+    }
+
+    // Default 2-matrix multiply (column-major)
+    const col0 = q3MulMat3Vec3(A, B.ex);
+    const col1 = q3MulMat3Vec3(A, B.ey);
+    const col2 = q3MulMat3Vec3(A, B.ez);
+
+    let m = new q3Mat3();
+    m.SetRows(col0, col1, col2); // or SetColumns if your Mat3 uses column vectors
+    return m;
+}
+
+/*function q3MulMat3(A, B)
 {
     return new q3Mat3(
         // Column 0
@@ -139,7 +153,7 @@ function q3MulMat3(A, B)
         A.ex.y * B.ez.x + A.ey.y * B.ez.y + A.ez.y * B.ez.z,
         A.ex.z * B.ez.x + A.ey.z * B.ez.y + A.ez.z * B.ez.z
     );
-}
+}*/
 
 
 //--------------------------------------------------------------------------------------------------
@@ -191,9 +205,9 @@ function q3OuterProduct(u, v)
     const c = v.scale(u.z);
 
     return new q3Mat3(
-        a.x, b.x, c.x,
-        a.y, b.y, c.y,
-        a.z, b.z, c.z
+        a.x, a.y, a.z,
+        b.x, b.y, b.z,
+        c.x, c.y, c.z
     );
 }
 
@@ -278,6 +292,7 @@ q3Mat3.prototype.getCol = function(i)
     if (i === 2) return new q3Vec3(this.ex.z, this.ey.z, this.ez.z);
     throw new Error("bad column");
 };
+
 
 q3Mat3.prototype.set = function(row, col, value)
 {

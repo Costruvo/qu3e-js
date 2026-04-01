@@ -9,26 +9,6 @@ function q3Abs(x) {
     return Math.abs(x);
 }
 
-function ComputeFatAABB(aabb, velocity)
-{
-    const fat = 0.1; // base padding
-
-    let min = aabb.min.sub(new q3Vec3(fat, fat, fat));
-    let max = aabb.max.add(new q3Vec3(fat, fat, fat));
-
-    // expand in direction of motion
-    if (velocity.x > 0) max.x += velocity.x;
-    else min.x += velocity.x;
-
-    if (velocity.y > 0) max.y += velocity.y;
-    else min.y += velocity.y;
-
-    if (velocity.z > 0) max.z += velocity.z;
-    else min.z += velocity.z;
-
-    return new q3AABB(min, max);
-}
-
 class q3DynamicAABBTree {
     constructor() {
         this.m_root = q3DynamicAABBTree.Node.Null;
@@ -48,9 +28,13 @@ class q3DynamicAABBTree {
     }
   
     Insert(aabb, userData) {
+
         const id = this.AllocateNode();
+
+        //console.log("Creating new node, and inserting into tree. AABB: ", aabb, "userData: ", userData, "Node ID: ", id);
+        //alert("Created node");
         
-        this.m_nodes[id].aabb = new q3AABB(aabb.min.clone(), aabb.max.clone());
+        this.m_nodes[id].aabb = aabb.clone();
       
         q3DynamicAABBTree.FattenAABB(this.m_nodes[id].aabb);
       
@@ -72,10 +56,11 @@ class q3DynamicAABBTree {
         const node = this.m_nodes[id];
         if (!node.IsLeaf()) throw new Error("Update: Node is not a leaf");
 
-        if (node.aabb.ContainsAABB(aabb)) return false;
+        if (node.aabb.ContainsAABB(aabb))
+            return false;
 
         this.RemoveLeaf(id);
-        node.aabb = new q3AABB(aabb.min.clone(), aabb.max.clone());
+        node.aabb = aabb.clone();
       
         q3DynamicAABBTree.FattenAABB(node.aabb);
       
@@ -84,7 +69,7 @@ class q3DynamicAABBTree {
     }
 
     GetUserData(id) { return this.m_nodes[id].userData; }
-    GetFatAABB(id) { return this.m_nodes[id].aabb; }
+    GetFatAABB(id) { return this.m_nodes[id].aabb.clone(); }
 
     //--------------------------------------------------------------------------------------------------
     // Render (Debug)
@@ -126,7 +111,7 @@ class q3DynamicAABBTree {
         }
     }
 
-    //--------------------------------------------------------------------------------------------------
+        //--------------------------------------------------------------------------------------------------
     // Free list
     AddToFreeList(index) {
         for (let i = index; i < this.m_capacity - 1; i++) {
@@ -183,7 +168,7 @@ class q3DynamicAABBTree {
     //--------------------------------------------------------------------------------------------------
     Balance(iA) {
         const A = this.m_nodes[iA];
-        if (A.IsLeaf() || A.height <= 1) return iA;
+        if (A.IsLeaf() || A.height == 1) return iA; // <= 1?
 
         const iB = A.left, iC = A.right;
         const B = this.m_nodes[iB], C = this.m_nodes[iC];
@@ -251,8 +236,6 @@ class q3DynamicAABBTree {
     }
 
     InsertLeaf(id) {
-        
-      
         if (this.m_root === q3DynamicAABBTree.Node.Null) {
             this.m_root = id;
             this.m_nodes[id].parent = q3DynamicAABBTree.Node.Null;
@@ -261,7 +244,7 @@ class q3DynamicAABBTree {
 
         // Find best sibling
         let searchIndex = this.m_root;
-        const leafAABB = this.m_nodes[id].aabb;
+        const leafAABB = this.m_nodes[id].aabb.clone();
 
         while (!this.m_nodes[searchIndex].IsLeaf()) {
             const node = this.m_nodes[searchIndex];
@@ -313,7 +296,10 @@ class q3DynamicAABBTree {
     }
 
     RemoveLeaf(id) {
-        if (id === this.m_root) { this.m_root = q3DynamicAABBTree.Node.Null; return; }
+        if (id === this.m_root) {
+            this.m_root = q3DynamicAABBTree.Node.Null;
+            return;
+        }
 
         const parent = this.m_nodes[id].parent;
         const grandParent = this.m_nodes[parent].parent;
@@ -339,7 +325,7 @@ class q3DynamicAABBTree {
             const node = this.m_nodes[index];
           
             // rare case check
-            if (node.left === q3DynamicAABBTree.Node.Null || node.right === q3DynamicAABBTree.Node.Null) break;
+            //if (node.left === q3DynamicAABBTree.Node.Null || node.right === q3DynamicAABBTree.Node.Null) break;
           
             const left = node.left, right = node.right;
 
@@ -353,16 +339,24 @@ class q3DynamicAABBTree {
     //--------------------------------------------------------------------------------------------------
     // Template-style queries (callback object must have TreeCallBack(id) method)
     Query(cb, aabb) {
+        let hits = 0;
+        
         const stack = [this.m_root];
         while (stack.length > 0) {
             const id = stack.pop();
-            if (id === q3DynamicAABBTree.Node.Null) continue;
+            if (id === q3DynamicAABBTree.Node.Null) {
+                continue;
+            }
 
             const n = this.m_nodes[id];
-            if (!n) continue; // skip invalid node
+            if (!n) {
+                throw new Error("Invalid node in AABB tree: " + id);
+                continue;
+            }
             
             if (q3AABBtoAABB(aabb, n.aabb)) {
                 if (n.IsLeaf()) {
+                    hits++;
                     if (!cb.TreeCallBack(id)) return;
                 } else {
                     stack.push(n.left);

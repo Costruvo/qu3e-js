@@ -37,7 +37,10 @@ function q3BroadPhase(manager)
 q3BroadPhase.prototype.InsertBox = function(box, aabb)
 {
     if (box.broadPhaseIndex !== -1)
+    {
+        alert("Invalid box");
         return;
+    }
 
     const id = this.m_tree.Insert(aabb, box);
 
@@ -57,7 +60,6 @@ q3BroadPhase.prototype.RemoveBox = function(box)
 //--------------------------------------------------------------------------------------------------
 // Sort must match C++ comparator
 //--------------------------------------------------------------------------------------------------
-
 function ContactPairSort(a, b)
 {
     if (a.A < b.A) return -1;
@@ -180,6 +182,7 @@ q3BroadPhase.prototype.BufferMove = function(id)
     this.m_moveBuffer[this.m_moveCount++] = id;
 };
 
+/*
 q3BroadPhase.prototype.AddPair = function(A, B)
 {
     const pair = {
@@ -189,6 +192,7 @@ q3BroadPhase.prototype.AddPair = function(A, B)
 
     this.m_pairBuffer[this.m_pairCount++] = pair;
 }
+*/
 
 //--------------------------------------------------------------------------------------------------
 // Tree callback

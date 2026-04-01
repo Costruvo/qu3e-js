@@ -1,3 +1,4 @@
+
 class q3ContactConstraintState {
     constructor() {
         this.contacts = [];
@@ -32,8 +33,8 @@ class q3ContactConstraintState {
         this.mA = 0;
         this.mB = 0;
 
-        this.iA = q3IdentityMat3();
-        this.iB = q3IdentityMat3();
+        this.iA = new q3Mat3();
+        this.iB = new q3Mat3();
 
         this.friction = 0;
         this.restitution = 0;
@@ -81,7 +82,7 @@ class q3ContactSolver {
 
     PreSolve(dt) {
         for (let i = 0; i < this.m_contactCount; ++i) {
-            let cs = this.m_contacts[i];
+            let cs = this.m_contacts[i]; // cs = q3ContactConstraintState*
             let vA = this.m_velocities[cs.indexA].v;
             let wA = this.m_velocities[cs.indexA].w;
             let vB = this.m_velocities[cs.indexB].v;
@@ -104,8 +105,8 @@ class q3ContactSolver {
                 for (let k = 0; k < 2; ++k) {
                     let raCt = q3Cross(cs.tangentVectors[k], c.ra);
                     let rbCt = q3Cross(cs.tangentVectors[k], c.rb);
-                    tm[i] += q3Dot(raCt, q3MulMat3Vec3(cs.iA, raCt)) + q3Dot(rbCt, q3MulMat3Vec3(cs.iB, rbCt));
-                    c.tangentMass[k] = q3Invert(tm[i]);
+                    tm[k] += q3Dot(raCt, q3MulMat3Vec3(cs.iA, raCt)) + q3Dot(rbCt, q3MulMat3Vec3(cs.iB, rbCt));
+                    c.tangentMass[k] = q3Invert(tm[k]);
                 }
 
                 // Bias
@@ -126,14 +127,14 @@ class q3ContactSolver {
                 wB = wB.add(q3MulMat3Vec3(cs.iB, q3Cross(c.rb, P)));
 
                 // Restitution bias
-                let dv = q3Sub(
+                // r32 dv = q3Dot( vB + q3Cross( wB, c->rb ) - vA - q3Cross( wA, c->ra ), cs->normal );
+                let dv = q3Dot(q3Sub(
                     q3Add(vB, q3Cross(wB, c.rb)),
                     q3Add(vA, q3Cross(wA, c.ra))
-                );
+                ), cs.normal);
                 
-                let relVel = q3Dot(dv, cs.normal);
-                if (relVel < -1.0) {
-                    c.bias += -(cs.restitution) * relVel;
+                if (dv < -1.0) {
+                    c.bias += -(cs.restitution) * dv;
                 }
             }
 
@@ -153,7 +154,7 @@ class q3ContactSolver {
             let wB = this.m_velocities[cs.indexB].w;
 
             for (let j = 0; j < cs.contactCount; ++j) {
-                let c = cs.contacts[j];
+                let c = cs.contacts[j]; // c = q3ContactState*
 
                 let dv = vB.add(q3Cross(wB, c.rb)).sub(vA).sub(q3Cross(wA, c.ra));
 
@@ -161,8 +162,8 @@ class q3ContactSolver {
                 if (this.m_enableFriction) {
                     for (let k = 0; k < 2; ++k) {
                         let lambda = -q3Dot(dv, cs.tangentVectors[k]) * c.tangentMass[k];
-                        let maxLambda = cs.friction * c.normalImpulse;
-                        
+                        let maxLambda = (cs.friction * .01) * c.normalImpulse;
+
                         let oldPT = c.tangentImpulse[k];
                         c.tangentImpulse[k] = q3Clamp(-maxLambda, maxLambda, oldPT + lambda);
                         lambda = c.tangentImpulse[k] - oldPT;
@@ -187,11 +188,13 @@ class q3ContactSolver {
 
                 // Clamp impulse
                 let oldPN = c.normalImpulse;
-                c.normalImpulse = Math.max(oldPN + lambda, 0.0);
+                c.normalImpulse = Math.max(oldPN + lambda, 0);
                 lambda = c.normalImpulse - oldPN;
 
                 // Apply impulse
                 let impulse = cs.normal.mulScalar(lambda);
+
+
                 
                 vA = vA.sub(impulse.mulScalar(cs.mA));
                 wA = wA.sub(q3MulMat3Vec3(cs.iA, q3Cross(c.ra, impulse)));

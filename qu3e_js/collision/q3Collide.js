@@ -30,7 +30,7 @@ function q3TrackEdgeAxis(axis, n, s, sMax, normal, axisNormal)
     if (s > 0) return true;
 
     let len = q3Length(normal);
-    if (len === 0) return false;
+    //if (len === 0) return false;
 
     let l = 1.0 / len;
     s *= l;
@@ -63,44 +63,26 @@ class q3ClipVertex
             key: 0
         };
     }
+
+    clone() {
+        const cv = new q3ClipVertex();
+        cv.v = this.v.clone();
+        cv.f.inR = this.f.inR;
+        cv.f.outR = this.f.outR;
+        cv.f.inI = this.f.inI;
+        cv.f.outI = this.f.outI;
+        cv.f.key = this.f.key;
+        return cv;
+    }
 }
 
 
 //--------------------------------------------------------------------------------------------------
 // q3ComputeReferenceEdgesAndBasis
 //--------------------------------------------------------------------------------------------------
-
-function q3BuildReferenceBasis(n)
-{
-    let absX = Math.abs(n.x);
-    let absY = Math.abs(n.y);
-    let absZ = Math.abs(n.z);
-
-    let t = new q3Vec3();
-
-    // pick tangent axis
-    if (absX > absY)
-        t.Set(0, 0, 1);
-    else
-        t.Set(1, 0, 0);
-
-    // orthonormal basis (Gram-Schmidt)
-    let b = q3Cross(t, n);
-    b.normalizeEq();
-
-    let s = q3Cross(n, b);
-
-    let m = new q3Mat3();
-    m.ex = b;
-    m.ey = s;
-    m.ez = n;
-
-    return m;
-}
-
 function q3ComputeReferenceEdgesAndBasis(eR, rtx, n, axis, clipEdges, basis, e)
 {
-    n = q3MulMat3Vec3(q3Transpose(rtx.rotation), n);
+    let norm = q3MulMat3Vec3(q3Transpose(rtx.rotation), n);
 
     if (axis >= 3) axis -= 3;
 
@@ -109,7 +91,7 @@ function q3ComputeReferenceEdgesAndBasis(eR, rtx, n, axis, clipEdges, basis, e)
     switch (axis)
     {
         case 0:
-            if (n.x > 0)
+            if (norm.x > 0)
             {
                 clipEdges[0] = 1;
                 clipEdges[1] = 8;
@@ -132,7 +114,7 @@ function q3ComputeReferenceEdgesAndBasis(eR, rtx, n, axis, clipEdges, basis, e)
             break;
 
         case 1:
-            if (n.y > 0)
+            if (norm.y > 0)
             {
                 clipEdges[0] = 0;
                 clipEdges[1] = 1;
@@ -155,7 +137,7 @@ function q3ComputeReferenceEdgesAndBasis(eR, rtx, n, axis, clipEdges, basis, e)
             break;
 
         case 2:
-            if (n.z > 0)
+            if (norm.z > 0)
             {
                 clipEdges[0] = 11;
                 clipEdges[1] = 4;
@@ -186,13 +168,13 @@ function q3ComputeReferenceEdgesAndBasis(eR, rtx, n, axis, clipEdges, basis, e)
 function q3ComputeIncidentFace(out, e, tx, n)
 {
     // EXACT: n = -q3MulT(itx.rotation, n)
-    n = q3MulMat3Vec3(q3Transpose(tx.rotation), n).neg();
+    let norm = q3MulMat3Vec3(q3Transpose(tx.rotation), n).neg();
 
-    let absN = q3AbsVec3(n);
+    let absN = q3AbsVec3(norm);
 
     if (absN.x > absN.y && absN.x > absN.z)
     {
-        if (n.x > 0)
+        if (norm.x > 0)
         {
             out[0].v.Set( e.x,  e.y, -e.z );
             out[1].v.Set( e.x,  e.y,  e.z );
@@ -219,7 +201,7 @@ function q3ComputeIncidentFace(out, e, tx, n)
     }
     else if (absN.y > absN.x && absN.y > absN.z)
     {
-        if (n.y > 0)
+        if (norm.y > 0)
         {
             out[0].v.Set(-e.x,  e.y,  e.z);
             out[1].v.Set( e.x,  e.y,  e.z);
@@ -246,7 +228,7 @@ function q3ComputeIncidentFace(out, e, tx, n)
     }
     else
     {
-        if (n.z > 0)
+        if (norm.z > 0)
         {
             out[0].v.Set(-e.x,  e.y,  e.z);
             out[1].v.Set(-e.x, -e.y,  e.z);
@@ -283,13 +265,14 @@ function q3ComputeIncidentFace(out, e, tx, n)
 //--------------------------------------------------------------------------------------------------
 // q3Orthographic
 //--------------------------------------------------------------------------------------------------
-function q3Orthographic(sign, e, axis, clipEdge, input, inCount, output)
-{
+//--------------------------------------------------------------------------------------------------
+// q3Orthographic (faithful JS port with feature pair preservation)
+//--------------------------------------------------------------------------------------------------
+function q3Orthographic(sign, e, axis, clipEdge, input, inCount, output) {
     let outCount = 0;
     let a = input[inCount - 1];
 
-    for (let i = 0; i < inCount; ++i)
-    {
+    for (let i = 0; i < inCount; ++i) {
         let b = input[i];
 
         let da = sign * a.v.get(axis) - e;
@@ -297,37 +280,48 @@ function q3Orthographic(sign, e, axis, clipEdge, input, inCount, output)
 
         let cv = new q3ClipVertex();
 
-        // B
-        if ((InFront(da) && InFront(db)) || On(da) || On(db))
-        {
+        // Both in front or on the plane -> keep b
+        if ((InFront(da) && InFront(db)) || On(da) || On(db)) {
             output[outCount++] = b;
         }
-        // I
-        else if (InFront(da) && Behind(db))
-        {
-            cv.f = Object.assign(new q3FeaturePair(), b.f);
-            
+        // a in front, b behind -> intersection only
+        else if (InFront(da) && Behind(db)) {
+            // Copy feature data from b
+            cv.f.inR  = b.f.inR;
+            cv.f.outR = b.f.outR;
+            cv.f.inI  = b.f.inI;
+            cv.f.outI = b.f.outI;
+            cv.f.key  = b.f.key;
+
+            // Interpolate vertex position
             let t = da / (da - db);
             cv.v = q3Add(a.v, q3MulScalarVec3(t, q3Sub(b.v, a.v)));
 
+            // Set clipEdge feature
             cv.f.outR = clipEdge;
             cv.f.outI = 0;
 
             output[outCount++] = cv;
         }
-        // I, B
-        else if (Behind(da) && InFront(db))
-        {
-            cv.f = Object.assign(new q3FeaturePair(), a.f);
-            
+        // a behind, b in front -> intersection + b
+        else if (Behind(da) && InFront(db)) {
+            // Copy feature data from a
+            cv.f.inR  = a.f.inR;
+            cv.f.outR = a.f.outR;
+            cv.f.inI  = a.f.inI;
+            cv.f.outI = a.f.outI;
+            cv.f.key  = a.f.key;
+
+            // Interpolate vertex position
             let t = da / (da - db);
             cv.v = q3Add(a.v, q3MulScalarVec3(t, q3Sub(b.v, a.v)));
 
+            // Set clipEdge feature
             cv.f.inR = clipEdge;
             cv.f.inI = 0;
 
             output[outCount++] = cv;
-            output[outCount++] = b;
+            output[outCount++] = b; // add the original vertex behind the plane
         }
 
         a = b;
@@ -354,7 +348,6 @@ function q3Clip(rPos, e, clipEdges, basis, incident, outVerts, outDepths)
     {
         input[i] = new q3ClipVertex();
         input[i].v = q3MulMat3Vec3(q3Transpose(basis), q3Sub(incident[i].v, rPos));
-        input[i].f = incident[i].f;
     }
 
     outCount = q3Orthographic(1.0, e.x, 0, clipEdges[0], input, inCount, output);
@@ -379,7 +372,7 @@ function q3Clip(rPos, e, clipEdges, basis, incident, outVerts, outDepths)
         {
             outVerts[outCount] = new q3ClipVertex();
             outVerts[outCount].v = q3Add(q3MulMat3Vec3(basis, input[i].v), rPos);
-            outVerts[outCount].f = input[i].f;
+            outVerts[outCount].f = input[i].clone(); // use clone to preserve key
             outDepths[outCount++] = d;
         }
     }
@@ -406,17 +399,17 @@ function q3EdgesContact(CA, CB, PA, QA, PB, QB)
 
     let TA, TB;
 
-    if (Math.abs(denom) < 1e-8)
+    /*if (Math.abs(denom) < 1e-8)
     {
         // Parallel fallback (REQUIRED for stability in JS)
         TA = 0;
         TB = (b > e ? c / b : f / e);
     }
     else
-    {
+    {*/
         TA = (b * f - c * e) / denom;
         TB = (b * TA + f) / e;
-    }
+    //}
 
     CA.Set(
         PA.x + DA.x * TA,
@@ -495,15 +488,13 @@ function q3BoxtoBox(m, A, B)
     let absC = new q3Mat3();
     let parallel = false;
     
-    const kCosTol = 1e-3; // tighter than 1e-6
+    const kCosTol = 1e-6;
 
     for (let i = 0; i < 3; ++i)
     {
         for (let j = 0; j < 3; ++j)
         {
-            // (optional clamping)
-            let val = Math.min(Math.abs(C.get(i,j)), 1.0); // clamp
-            //let val = Math.abs(C.get(i, j)); // unclamped
+            let val = Math.abs(C.get(i, j));
             
             absC.set(i, j, val);
             
@@ -511,7 +502,6 @@ function q3BoxtoBox(m, A, B)
                 parallel = true;
         }
     }
-    
 
     // --------------------------------------------------
     // t = A^T (b.pos - a.pos)
@@ -542,33 +532,34 @@ function q3BoxtoBox(m, A, B)
     // A axes
     // --------------------------------------------------
 
-    s = Math.abs(t.x) - (eA.x + q3Dot(absC.getCol(0), eB));
+    s = Math.abs(t.x) - (eA.x + q3Dot(absC.Column0(), eB));
     if (q3TrackFaceAxis(aAxis, 0, s, aMax, atx.rotation.ex, nA)) return;
 
-    s = Math.abs(t.y) - (eA.y + q3Dot(absC.getCol(1), eB));
+    s = Math.abs(t.y) - (eA.y + q3Dot(absC.Column1(), eB));
     if (q3TrackFaceAxis(aAxis, 1, s, aMax, atx.rotation.ey, nA)) return;
 
-    s = Math.abs(t.z) - (eA.z + q3Dot(absC.getCol(2), eB));
+    s = Math.abs(t.z) - (eA.z + q3Dot(absC.Column2(), eB));
     if (q3TrackFaceAxis(aAxis, 2, s, aMax, atx.rotation.ez, nA)) return;
 
     // --------------------------------------------------
     // B axes
     // --------------------------------------------------
 
-    s = Math.abs(q3Dot(t, C.getCol(0))) - (eB.x + q3Dot(absC.getRow(0), eA));
+    s = Math.abs(q3Dot(t, C.ex)) - (eB.x + q3Dot(absC.ex, eA));
     if (q3TrackFaceAxis(bAxis, 3, s, bMax, btx.rotation.ex, nB)) return;
 
-    s = Math.abs(q3Dot(t, C.getCol(1))) - (eB.y + q3Dot(absC.getRow(1), eA));
+    s = Math.abs(q3Dot(t, C.ey)) - (eB.y + q3Dot(absC.ey, eA));
     if (q3TrackFaceAxis(bAxis, 4, s, bMax, btx.rotation.ey, nB)) return;
 
-    s = Math.abs(q3Dot(t, C.getCol(2))) - (eB.z + q3Dot(absC.getRow(2), eA));
+    s = Math.abs(q3Dot(t, C.ez)) - (eB.z + q3Dot(absC.ez, eA));
     if (q3TrackFaceAxis(bAxis, 5, s, bMax, btx.rotation.ez, nB)) return;
   
     // --------------------------------------------------
     // Edge axes (ONLY if not parallel)
     // --------------------------------------------------
   
-    if (!parallel)
+    
+    if(false)//if (!parallel)
     {
         let rA, rB;
 
@@ -697,9 +688,9 @@ function q3BoxtoBox(m, A, B)
             new q3ClipVertex(),
             new q3ClipVertex()
         ];
-      
+        
         q3ComputeIncidentFace(incident, eI, itx, n);
-      
+        
         let clipEdges = [0,0,0,0];
         let basis = new q3Mat3();
         let e = new q3Vec3();
@@ -709,7 +700,7 @@ function q3BoxtoBox(m, A, B)
         let outVerts = [];
         let depths = [];
       
-        // optional but unnecessary -- clip to reference point instead?
+        // clip to reference point instead
         //let refPos = q3Add(rtx.position, q3MulScalarVec3(e.z, n));
 
         let outNum = q3Clip(
@@ -739,8 +730,8 @@ function q3BoxtoBox(m, A, B)
                     tmp = pair.outI; pair.outI = pair.outR; pair.outR = tmp;
                 }
 
-                c.fp = pair;
-                c.position = outVerts[i].v;
+                c.fp = pair.clone();
+                c.position = outVerts[i].v.clone();
                 c.penetration = depths[i];
             }
             

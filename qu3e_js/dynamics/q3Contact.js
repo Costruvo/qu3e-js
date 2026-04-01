@@ -25,12 +25,12 @@ function q3MixFriction(A, B)
 
 class q3FeaturePair
 {
-    constructor()
+    constructor(_inR = 0, _outR = 0, _inI = 0, _outI = 0)
     {
-        this.inR = 0;
-        this.outR = 0;
-        this.inI = 0;
-        this.outI = 0;
+        this.inR = _inR;
+        this.outR = _outR;
+        this.inI = _inI;
+        this.outI = _outI;
     }
 
     getKey()
@@ -90,7 +90,7 @@ class q3Contact
         copy.bias = this.bias;
         copy.normalMass = this.normalMass;
         copy.tangentMass = [this.tangentMass[0], this.tangentMass[1]];
-        copy.fp = Object.assign(new q3FeaturePair(), this.fp); // shallow copy, usually enough
+        copy.fp = new q3FeaturePair(this.fp.inR, this.fp.outR, this.fp.inI, this.fp.outI);
         copy.warmStarted = this.warmStarted;
 
         return copy;

@@ -200,8 +200,8 @@ TestCollisions()
         let manifold = constraint.manifold;
         let oldManifold = manifold.Clone();
 
-        let ot0 = oldManifold.tangentVectors[0];
-        let ot1 = oldManifold.tangentVectors[1];
+        let ot0 = oldManifold.tangentVectors[0].clone();
+        let ot1 = oldManifold.tangentVectors[1].clone();
 
         constraint.SolveCollision();
       
@@ -242,6 +242,8 @@ TestCollisions()
 
                     c.tangentImpulse[1] =
                         q3Dot(friction, manifold.tangentVectors[1]);
+                    
+                    
 
                     c.warmStarted = Math.max(oldWarm, oldWarm + 1);
 
